@@ -4,6 +4,8 @@ on:
   push:
     branches: ["**"]
   pull_request:
+  # The pipeline job below is opt-in; see the comment on it.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -51,14 +53,18 @@ jobs:
       - name: Test
         run: uv run pytest -q
 
-  # The full chain, which needs the source data. Guarded rather than deleted: on a clone
-  # without `data/raw/` this is skipped, so a reviewer sees "not run here" instead of a
-  # red X that means nothing. Place the sources under data/raw/source_version=<release>/
-  # and it runs -- see the Data section of README.md.
+  # The full chain, which needs the source data -- and the source data is gitignored, so
+  # on a GitHub-hosted runner it is never there. Rather than leave a job that is silently
+  # skipped on every push, which would be decoration, this is opt-in: it runs only when
+  # someone dispatches it deliberately, from a runner that has the sources in place.
+  #
+  # Stated plainly because it is a real limit: on this repository, in this configuration,
+  # this job does not run. The end-to-end pipeline is verified locally. See the Data
+  # section of README.md for the layout it expects.
   pipeline:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: hashFiles('data/raw/**') != ''
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 

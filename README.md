@@ -848,8 +848,10 @@ and the conditions under which assignment becomes reasonable.
 Because the sources are not redistributed (see [Data](#data)), CI is split in two. The
 `check` job always runs: lint, `dbt parse`, and the full test suite, in which every
 data-reading test skips itself. The `pipeline` job -- ingest, geo, resolution, dbt build,
-Dagster materialize -- is guarded on `hashFiles('data/raw/**')` and is **skipped, not
-failed**, on a clone without the data.
+Dagster materialize -- is `workflow_dispatch` only, because the sources are gitignored
+and a GitHub-hosted runner therefore never has them. **On this repository that job does
+not run**, and saying it is "skipped when data is absent" would have dressed up a
+permanent condition as a conditional one.
 
 So a green CI badge here means less than it looks like. It means the code lints, the dbt
 project parses, and the data-independent tests pass. **The end-to-end run is verified on

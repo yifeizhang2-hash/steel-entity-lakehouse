@@ -1,0 +1,14 @@
+# The lake is Iceberg; DuckDB reads it. `transform/bootstrap.py` creates the views this
+# profile's database points at, so dbt never touches the Iceberg metadata itself.
+steel_lakehouse:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # Relative to the directory dbt is invoked from, which is the repo root (see the
+      # Makefile). `STEEL_DBT_DB` overrides it, which is how the tests point dbt at a
+      # throwaway lake.
+      path: "{{ env_var('STEEL_DBT_DB', 'lake/dbt.duckdb') }}"
+      threads: 4
+      extensions:
+        - iceberg

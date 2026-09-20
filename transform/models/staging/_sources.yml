@@ -1,0 +1,24 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Bronze Iceberg tables, faithful to the source files. Nothing is filtered here;
+      every scoping decision is made in staging so that the filter is visible and
+      reversible.
+    schema: raw
+    tables:
+      - name: plantgen
+      - name: gspt_plants
+      - name: gspt_production
+      - name: furnace_years
+
+  - name: geo
+    schema: geo
+    tables:
+      - name: gspt_plant_county
+
+  - name: resolution
+    schema: resolution
+    tables:
+      - name: gspt_plantgen_candidates

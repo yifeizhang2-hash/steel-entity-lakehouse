@@ -1,0 +1,190 @@
+version: 2
+
+models:
+  - name: dim_plant
+    description: >
+      One row per plant, per source system. The two populations sit side by side rather
+      than merged: nothing has established that a GSPT plant and a PLANTGEN plant are
+      the same facility, so merging them would be asserting a match.
+    columns:
+      - name: plant_key
+        description: Source-qualified surrogate key, e.g. `gspt:P100000120919`.
+        data_tests: [unique, not_null]
+      - name: source_system
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["gspt", "plantgen"]
+      - name: source_plant_id
+        data_tests: [not_null]
+
+  - name: dim_production_unit
+    description: GSPT's real grain, plant x production unit.
+    columns:
+      - name: production_unit_key
+        data_tests: [unique, not_null]
+      - name: plant_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_plant')
+                field: plant_key
+
+  - name: dim_owner
+    description: >
+      Owners as GSPT identifies them. `Owner PermID` is the only stable external
+      identifier in the project. PLANTGEN has no owner column, so it contributes none.
+    columns:
+      - name: owner_permid
+        data_tests: [unique, not_null]
+      - name: owner_name
+        data_tests: [not_null]
+
+  - name: dim_furnace
+    description: >
+      One row per furnace. Keyed by furnace TYPE plus id, because `ID` is unique only
+      within a type: 18 ids collide across BOF and EAF and denote different facilities.
+    columns:
+      - name: furnace_key
+        data_tests: [unique, not_null]
+      - name: furnace_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["BOF", "EAF"]
+      - name: facility_id
+        data_tests: [not_null]
+
+  - name: fct_furnace_year
+    description: Furnace-level annual observations, 2012-2023.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [furnace_type, facility_id, year, fid]
+    columns:
+      - name: furnace_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_furnace')
+                field: furnace_key
+      - name: year
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 2012
+                max_value: 2023
+      - name: facility_id
+        data_tests: [not_null]
+
+  - name: fct_plant_production_year
+    description: Plant x year x metric production, 2019-2022.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [plant_id, year, metric]
+    columns:
+      - name: plant_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_plant')
+                field: plant_key
+      - name: year
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 2019
+                max_value: 2022
+      - name: value_status
+        description: >
+          `reported`, `unknown`, `bounded`, `unparsed` or `absent`. Kept separate from
+          `value_ttpa` so that "the tracker looked and could not find out" stays
+          distinguishable from "the tracker never asked".
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["reported", "unknown", "bounded", "unparsed", "absent"]
+
+  - name: dim_facility_ownership_scd2
+    description: >
+      Ownership history per facility as a Type 2 dimension. Spans are driven by the
+      NORMALISED owner name; diffing raw strings would measure formatting churn.
+    columns:
+      - name: ownership_key
+        data_tests: [unique, not_null]
+      - name: facility_key
+        data_tests: [not_null]
+      - name: valid_from_year
+        data_tests: [not_null]
+      - name: is_current
+        data_tests: [not_null]
+
+  - name: fct_ownership_change
+    description: >
+      Observed ownership transitions, classified by how much they should be believed.
+      A changed string is not a changed owner. The classification thresholds are
+      hand-set and have never been checked against a label, which is what
+      `classification_confidence` records.
+    columns:
+      - name: classification_confidence
+        description: >
+          `derived` where the classification follows from equality, and
+          `heuristic_unvalidated` where it rests on a hand-chosen threshold. No
+          transition classified by heuristic has been confirmed by anyone.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["derived", "heuristic_unvalidated"]
+      - name: classification_rule
+        data_tests: [not_null]
+      - name: change_class
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["observation_gap", "likely_typo", "name_refinement",
+                         "round_trip", "credible_transfer"]
+
+  - name: bridge_plant_xref
+    description: >
+      CANDIDATE links between GSPT and PLANTGEN. This is not a match table and must not
+      become one: there are zero labels, no threshold, and the linker's geographic
+      comparators are correlated by construction. `tests/assert_bridge_has_no_verdict.sql`
+      fails the build if a verdict-shaped column ever appears.
+    columns:
+      - name: gspt_plant_id
+        data_tests: [not_null]
+      - name: resolution_status
+        description: >
+          `candidate` or `never_compared`. The 8 Canadian plants are `never_compared` --
+          blocking never reached them because PLANTGEN is a US census. That is a
+          different outcome from being compared and scored low, and collapsing the two
+          would hide them inside an accuracy figure.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["candidate", "never_compared"]
+      - name: blocking_reason
+        data_tests: [not_null]
+
+  - name: fct_ownership_noise
+    description: >
+      Where owner noise is removed, one stage at a time. Level 0 is measured BEFORE
+      deduplication, because the trailing-space oscillation on EAF:79 is removed by the
+      dedup and would otherwise never appear in the report at all.
+    columns:
+      - name: level
+        data_tests: [not_null]
+      - name: noisy_units
+        data_tests: [not_null]

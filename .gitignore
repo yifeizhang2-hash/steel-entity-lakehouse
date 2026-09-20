@@ -1,0 +1,55 @@
+# The lake is a build artifact: Iceberg data files, metadata and the SQLite catalog
+# are all rebuilt by `make ingest`. Nothing in here belongs in git.
+lake/
+# ...but NOT baselines/, which is a tracked reference point. See baselines/README.md.
+
+# Source data is NOT redistributed here. The Global Steel Plant Tracker is published
+# by Global Energy Monitor under its own terms, and PLANTGEN / the furnace extracts
+# are not ours to hand on either. Download them yourself and place them under
+# data/raw/source_version=<release>/ -- see the "Data" section of README.md.
+# Consequence, stated so it is not a surprise: the pipeline jobs in CI are guarded on
+# the data being present and are skipped, not failed, on a fresh clone.
+data/raw/
+
+# dlt working state
+.dlt/secrets.toml
+*.duckdb
+*.duckdb.wal
+
+# dbt build artifacts. `lake/dbt.duckdb` is rebuilt by `make dbt` from the Iceberg
+# catalog, so it is an artifact too.
+transform/target/
+transform/dbt_packages/
+transform/logs/
+
+# Dagster instance state
+.dagster/
+.tmp_dagster_home_*/
+logs/
+
+# Dagster instance state
+.dagster/
+.tmp_dagster_home_*/
+
+# geo downloads (P2) -- Census shapefiles are large and re-downloadable
+geo/cache/
+
+# Machine-generated labels. They exist only to exercise the evaluation pipeline and
+# must never be mistaken for the real decision log, which IS committed.
+labeling/decisions.synthetic.jsonl
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

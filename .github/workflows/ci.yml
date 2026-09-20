@@ -1,0 +1,127 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Everything verifiable without the source data. This is the job that must always be
+  # green: it runs on a fresh clone, where `data/raw/` is absent because the Global Steel
+  # Plant Tracker and the furnace extracts are not redistributed here.
+  #
+  # The data-dependent tests skip themselves -- every fixture in tests/conftest.py calls
+  # pytest.skip when its file is missing -- so `pytest -q` reports skips, not failures.
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --extra dev --frozen
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      # dagster-dbt resolves the dbt manifest at import time, so orchestration.definitions
+      # cannot be imported without one and pytest would fail during collection rather than
+      # skip. `dbt parse` writes the manifest from the project files alone; it never
+      # touches the warehouse, so it works with no data present.
+      - name: Parse the dbt project
+        run: |
+          uv run dbt deps --project-dir transform --profiles-dir transform
+          uv run dbt parse --project-dir transform --profiles-dir transform
+
+      - name: Test
+        run: uv run pytest -q
+
+  # The full chain, which needs the source data. Guarded rather than deleted: on a clone
+  # without `data/raw/` this is skipped, so a reviewer sees "not run here" instead of a
+  # red X that means nothing. Place the sources under data/raw/source_version=<release>/
+  # and it runs -- see the Data section of README.md.
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: hashFiles('data/raw/**') != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --extra dev --frozen
+
+      - name: Build the bronze lake
+        run: uv run python -m ingest.pipeline
+
+      # Restored before the geo step, so a warm cache means no census.gov request.
+      - name: Cache county boundaries
+        uses: actions/cache@v4
+        with:
+          path: geo/cache
+          key: census-cb-2023-county-500k
+
+      # Downloads an 11.6 MB county boundary file from census.gov on a cache miss.
+      - name: Geo enrichment
+        run: uv run python -m geo.enrich
+
+      - name: Entity resolution
+        run: uv run python -m resolution.report
+
+      - name: dbt build
+        run: |
+          uv run python -m transform.bootstrap
+          uv run dbt deps --project-dir transform --profiles-dir transform
+          uv run dbt build --project-dir transform --profiles-dir transform
+
+      # Runs after the artifacts exist: the transform tests assert against a built dbt
+      # project, and the geo tests against a populated boundary cache.
+      - name: Test
+        run: uv run pytest -q
+
+      # Proves the asset graph runs end to end, including the cross-asset checks.
+      - name: Dagster materialize
+        env:
+          DAGSTER_HOME: ${{ github.workspace }}/.dagster
+        run: |
+          mkdir -p "$DAGSTER_HOME"
+          uv run dagster asset materialize --select '*' \
+            -m orchestration.definitions --partition owner_filled_2025
+
+      - name: Report row counts
+        run: |
+          uv run python -c "from lakehouse.duck import table_counts; \
+            [print(f'{k}: {v}') for k, v in sorted(table_counts().items())]"
+
+  pre-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.11
+      - run: uv sync --extra dev --frozen
+      - run: uv run pre-commit run --all-files --show-diff-on-failure

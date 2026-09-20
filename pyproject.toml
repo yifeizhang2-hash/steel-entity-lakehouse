@@ -1,0 +1,67 @@
+[project]
+name = "steel-entity-lakehouse"
+version = "0.1.0"
+description = "Local lakehouse for North American steel plant entity resolution and dimensional modeling"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    # Ingestion layer only. See docs/adr/ADR-002-dataframe-boundary.md.
+    "polars>=1.0",
+    # Loader.
+    "dlt>=1.6",
+    # Table format + local SQLite catalog.
+    "pyiceberg[sql-sqlite,pyarrow]>=0.8",
+    "pyarrow>=16",
+    # Query engine.
+    "duckdb>=1.1",
+    # Everything downstream of ingestion, plus the two documented ingest exceptions
+    # (Excel parsing, two-row header unpivot).
+    "pandas>=2.2",
+    "openpyxl>=3.1",
+    # DataFrame contracts.
+    "pandera>=0.20",
+    "fastexcel>=0.21.0",
+    "geopandas>=1.0",
+    "pyogrio>=0.9",
+    "splink>=4.0",
+    "streamlit>=1.64.0",
+    "dbt-core>=1.8",
+    "dbt-duckdb>=1.8",
+    "dagster>=1.8",
+    "dagster-dbt>=0.24",
+    "dagster-webserver>=1.13.23",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "pre-commit>=3.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ingest", "lakehouse"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["lake", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "W"]
+ignore = ["E501"]
+
+[tool.dagster]
+module_name = "orchestration.definitions"
+code_location_name = "steel_lakehouse"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "slow: tests that run a full dlt pipeline end to end",
+]

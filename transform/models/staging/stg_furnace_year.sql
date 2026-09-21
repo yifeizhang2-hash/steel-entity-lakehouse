@@ -14,6 +14,8 @@
 -- 3. Repeated furnace-years for one facility.
 --
 --    `eaf_owner_filled.csv` contains facility EAF:79 48 times where it should appear
+--    24: every (year, fid) appears on two consecutive source lines. No other
+--    facility in the file is affected.
 --
 --    The two lines of a pair are NOT identical. Measured on the raw CSV, only 2 of the
 --    24 pairs match byte for byte; the other 22 differ in `Owner`, which is spelled

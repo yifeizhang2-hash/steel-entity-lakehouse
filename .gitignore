@@ -34,6 +34,12 @@ logs/
 # geo downloads (P2) -- Census shapefiles are large and re-downloadable
 geo/cache/
 
+# The human label log. Each row pairs a public GSPT id with an id from the licensed
+# reference census, so together they reconstruct part of that census's key mapping.
+# It is derived from the sources and stays with them, on the machine that has them.
+# The results it produced are reported in README.md; the file itself is not distributed.
+labeling/decisions.jsonl
+
 # Machine-generated labels. They exist only to exercise the evaluation pipeline and
 # must never be mistaken for the real decision log, which IS committed.
 labeling/decisions.synthetic.jsonl

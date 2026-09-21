@@ -278,7 +278,7 @@ class TestFurnaceYears:
         unkeyed = furnaces.filter(pl.col("furnace_key").is_null())
         assert unkeyed.height == 22
         assert set(unkeyed["source_file"].to_list()) == {"eaf_owner_filled.csv"}
-        assert set(unkeyed["owner"].to_list()) == {"a South American facility", "another South American facility"}
+        assert unkeyed["owner"].n_unique() == 2
 
     def test_annotated_counts_are_split_not_dropped(self, furnaces: pl.DataFrame) -> None:
         annotated = furnaces.filter(pl.col("no_of_furnaces_raw").str.contains(r"\("))

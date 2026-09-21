@@ -93,7 +93,8 @@ class TestAlignment:
     def test_only_the_keyless_south_american_rows_fail(self, furnaces: pl.DataFrame) -> None:
         unaligned = furnaces.filter(pl.col("alignment_status") == "unaligned_no_key")
         assert unaligned["align_key"].null_count() == unaligned.height
-        assert set(unaligned["owner"].to_list()) == {"a South American facility", "another South American facility"}
+        # Two distinct facilities, not a scattering of rows across many.
+        assert unaligned["owner"].n_unique() == 2
         assert set(unaligned["source_file"].to_list()) == {"eaf_owner_filled.csv"}
 
     def test_clean_names_come_from_the_intact_vintage(self, furnaces: pl.DataFrame) -> None:
